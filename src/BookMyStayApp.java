@@ -1,11 +1,54 @@
 import java.util.*;
-class InvalidBookingException extends Exception {
- public InvalidBookingException(String message) {
+class CancellationException extends Exception {
+ public CancellationException(String message) {
   super(message);
  }
 }
 
-// Represents room inventory
+// Reservation Model
+class Reservation {
+ private String reservationId;
+ private String roomType;
+ private String roomId;
+ private boolean isCancelled;
+
+ public Reservation(String reservationId, String roomType, String roomId) {
+  this.reservationId = reservationId;
+  this.roomType = roomType;
+  this.roomId = roomId;
+  this.isCancelled = false;
+ }
+
+ public String getReservationId() {
+  return reservationId;
+ }
+
+ public String getRoomType() {
+  return roomType;
+ }
+
+ public String getRoomId() {
+  return roomId;
+ }
+
+ public boolean isCancelled() {
+  return isCancelled;
+ }
+
+ public void cancel() {
+  isCancelled = true;
+ }
+
+ @Override
+ public String toString() {
+  return "Reservation ID: " + reservationId +
+          ", Room Type: " + roomType +
+          ", Room ID: " + roomId +
+          ", Status: " + (isCancelled ? "Cancelled" : "Confirmed");
+ }
+}
+
+// Inventory Management
 class RoomInventory {
 
  private Map<String, Integer> inventory;
@@ -17,26 +60,11 @@ class RoomInventory {
   inventory.put("Suite", 1);
  }
 
- // Validate room type
- public void validateRoomType(String roomType) throws InvalidBookingException {
-  if (!inventory.containsKey(roomType)) {
-   throw new InvalidBookingException("Invalid room type: " + roomType);
-  }
+ public void increment(String roomType) {
+  inventory.put(roomType, inventory.getOrDefault(roomType, 0) + 1);
  }
 
- // Check availability
- public void validateAvailability(String roomType) throws InvalidBookingException {
-  int available = inventory.get(roomType);
-  if (available <= 0) {
-   throw new InvalidBookingException("No rooms available for type: " + roomType);
-  }
- }
-
- // Book a room (safe update)
- public void bookRoom(String roomType) throws InvalidBookingException {
-  validateRoomType(roomType);
-  validateAvailability(roomType);
-
+ public void decrement(String roomType) {
   inventory.put(roomType, inventory.get(roomType) - 1);
  }
 
@@ -48,30 +76,65 @@ class RoomInventory {
  }
 }
 
-// Represents booking request
-class BookingService {
+// Booking Store (acts like history + active records)
+class BookingStore {
 
- private RoomInventory inventory;
+ private Map<String, Reservation> reservations = new HashMap<>();
 
- public BookingService(RoomInventory inventory) {
-  this.inventory = inventory;
+ public void addReservation(Reservation reservation) {
+  reservations.put(reservation.getReservationId(), reservation);
  }
 
- public void createBooking(String guestName, String roomType) {
+ public Reservation getReservation(String id) {
+  return reservations.get(id);
+ }
+}
+
+// Cancellation Service with rollback using Stack
+class CancellationService {
+
+ private RoomInventory inventory;
+ private BookingStore store;
+
+ // Stack to track released room IDs (LIFO rollback)
+ private Stack<String> rollbackStack = new Stack<>();
+
+ public CancellationService(RoomInventory inventory, BookingStore store) {
+  this.inventory = inventory;
+  this.store = store;
+ }
+
+ public void cancelBooking(String reservationId) {
   try {
-   // Fail-fast validation
-   if (guestName == null || guestName.trim().isEmpty()) {
-    throw new InvalidBookingException("Guest name cannot be empty.");
+   Reservation reservation = store.getReservation(reservationId);
+
+   // Validation
+   if (reservation == null) {
+    throw new CancellationException("Reservation does not exist.");
    }
 
-   inventory.bookRoom(roomType);
+   if (reservation.isCancelled()) {
+    throw new CancellationException("Reservation already cancelled.");
+   }
 
-   System.out.println("Booking successful for " + guestName +
-           " [Room Type: " + roomType + "]");
+   // Step 1: Track room ID in rollback stack
+   rollbackStack.push(reservation.getRoomId());
 
-  } catch (InvalidBookingException e) {
-   System.out.println("Booking failed: " + e.getMessage());
+   // Step 2: Restore inventory
+   inventory.increment(reservation.getRoomType());
+
+   // Step 3: Mark reservation cancelled
+   reservation.cancel();
+
+   System.out.println("Cancellation successful for Reservation ID: " + reservationId);
+
+  } catch (CancellationException e) {
+   System.out.println("Cancellation failed: " + e.getMessage());
   }
+ }
+
+ public void displayRollbackStack() {
+  System.out.println("\nRollback Stack (Recently Released Room IDs): " + rollbackStack);
  }
 }
 
@@ -81,30 +144,40 @@ class BookingService {
 
 public class BookMyStayApp {
  public static void main(String[] args) {
-
   RoomInventory inventory = new RoomInventory();
-  BookingService bookingService = new BookingService(inventory);
+  BookingStore store = new BookingStore();
+  CancellationService cancellationService = new CancellationService(inventory, store);
+
+  // Simulate confirmed bookings
+  Reservation r1 = new Reservation("RES201", "Deluxe", "D1");
+  Reservation r2 = new Reservation("RES202", "Standard", "S1");
+
+  store.addReservation(r1);
+  store.addReservation(r2);
+
+  // Assume inventory was reduced earlier
+  inventory.decrement("Deluxe");
+  inventory.decrement("Standard");
 
   inventory.displayInventory();
 
-  // Valid booking
-  bookingService.createBooking("Alice", "Deluxe");
+  // Valid cancellation
+  cancellationService.cancelBooking("RES201");
 
-  // Invalid room type
-  bookingService.createBooking("Bob", "Premium");
+  // Duplicate cancellation
+  cancellationService.cancelBooking("RES201");
 
-  // No availability case
-  bookingService.createBooking("Charlie", "Deluxe");
-
-  // Invalid guest name
-  bookingService.createBooking("", "Standard");
-
-  // Valid booking again
-  bookingService.createBooking("David", "Standard");
+  // Invalid reservation
+  cancellationService.cancelBooking("RES999");
 
   inventory.displayInventory();
+
+  cancellationService.displayRollbackStack();
  }
 }
+
+
+
 
 
 
