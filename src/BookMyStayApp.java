@@ -1,110 +1,136 @@
 import java.util.*;
-// Represents an optional add-on service
-class AddOnService {
- private String serviceName;
- private double cost;
+class Reservation {
+ private String reservationId;
+ private String guestName;
+ private String roomType;
+ private double totalAmount;
 
- public AddOnService(String serviceName, double cost) {
-  this.serviceName = serviceName;
-  this.cost = cost;
+ public Reservation(String reservationId, String guestName, String roomType, double totalAmount) {
+  this.reservationId = reservationId;
+  this.guestName = guestName;
+  this.roomType = roomType;
+  this.totalAmount = totalAmount;
  }
 
- public String getServiceName() {
-  return serviceName;
+ public String getReservationId() {
+  return reservationId;
  }
 
- public double getCost() {
-  return cost;
+ public String getGuestName() {
+  return guestName;
+ }
+
+ public String getRoomType() {
+  return roomType;
+ }
+
+ public double getTotalAmount() {
+  return totalAmount;
  }
 
  @Override
  public String toString() {
-  return serviceName + " (₹" + cost + ")";
+  return "Reservation ID: " + reservationId +
+          ", Guest: " + guestName +
+          ", Room Type: " + roomType +
+          ", Amount: ₹" + totalAmount;
  }
 }
 
-// Manages add-on services for reservations
-class AddOnServiceManager {
+// Maintains booking history (ordered)
+class BookingHistory {
 
- // Map<ReservationID, List of Services>
- private Map<String, List<AddOnService>> reservationServicesMap;
+ private List<Reservation> reservations;
 
- public AddOnServiceManager() {
-  reservationServicesMap = new HashMap<>();
+ public BookingHistory() {
+  reservations = new ArrayList<>();
  }
 
- // Add service to a reservation
- public void addService(String reservationId, AddOnService service) {
-  reservationServicesMap
-          .computeIfAbsent(reservationId, k -> new ArrayList<>())
-          .add(service);
-
-  System.out.println("Service added: " + service.getServiceName() +
-          " for Reservation ID: " + reservationId);
+ // Add confirmed reservation
+ public void addReservation(Reservation reservation) {
+  reservations.add(reservation);
+  System.out.println("Reservation added to history: " + reservation.getReservationId());
  }
 
- // Get services for a reservation
- public List<AddOnService> getServices(String reservationId) {
-  return reservationServicesMap.getOrDefault(reservationId, new ArrayList<>());
+ // Retrieve all reservations
+ public List<Reservation> getAllReservations() {
+  return Collections.unmodifiableList(reservations); // protects data from modification
  }
+}
 
- // Calculate total additional cost
- public double calculateTotalServiceCost(String reservationId) {
-  List<AddOnService> services = getServices(reservationId);
+// Generates reports from booking history
+class BookingReportService {
 
-  double total = 0;
-  for (AddOnService service : services) {
-   total += service.getCost();
-  }
-  return total;
- }
+ // Display all bookings
+ public void displayAllBookings(List<Reservation> reservations) {
+  System.out.println("\n--- Booking History ---");
 
- // Display services
- public void displayServices(String reservationId) {
-  List<AddOnService> services = getServices(reservationId);
-
-  if (services.isEmpty()) {
-   System.out.println("No add-on services for Reservation ID: " + reservationId);
+  if (reservations.isEmpty()) {
+   System.out.println("No bookings found.");
    return;
   }
 
-  System.out.println("\nAdd-On Services for Reservation ID: " + reservationId);
-  for (AddOnService service : services) {
-   System.out.println("- " + service);
+  for (Reservation res : reservations) {
+   System.out.println(res);
+  }
+ }
+
+ // Generate summary report
+ public void generateSummary(List<Reservation> reservations) {
+  System.out.println("\n--- Booking Summary Report ---");
+
+  int totalBookings = reservations.size();
+  double totalRevenue = 0;
+
+  Map<String, Integer> roomTypeCount = new HashMap<>();
+
+  for (Reservation res : reservations) {
+   totalRevenue += res.getTotalAmount();
+
+   roomTypeCount.put(
+           res.getRoomType(),
+           roomTypeCount.getOrDefault(res.getRoomType(), 0) + 1
+   );
   }
 
-  System.out.println("Total Add-On Cost: ₹" +
-          calculateTotalServiceCost(reservationId));
+  System.out.println("Total Bookings: " + totalBookings);
+  System.out.println("Total Revenue: ₹" + totalRevenue);
+
+  System.out.println("\nBookings by Room Type:");
+  for (Map.Entry<String, Integer> entry : roomTypeCount.entrySet()) {
+   System.out.println(entry.getKey() + ": " + entry.getValue());
+  }
  }
 }
+
 
 
 
 
 public class BookMyStayApp {
  public static void main(String[] args) {
-   AddOnServiceManager manager = new AddOnServiceManager();
+  BookingHistory history = new BookingHistory();
+  BookingReportService reportService = new BookingReportService();
 
-  // Simulated reservation ID (from previous use case)
-  String reservationId = "RES123";
+  // Simulate confirmed bookings
+  Reservation r1 = new Reservation("RES101", "Alice", "Deluxe", 3000);
+  Reservation r2 = new Reservation("RES102", "Bob", "Standard", 2000);
+  Reservation r3 = new Reservation("RES103", "Charlie", "Suite", 5000);
 
-  // Create add-on services
-  AddOnService breakfast = new AddOnService("Breakfast", 500);
-  AddOnService airportPickup = new AddOnService("Airport Pickup", 1200);
-  AddOnService extraBed = new AddOnService("Extra Bed", 800);
+  // Add to history (in order)
+  history.addReservation(r1);
+  history.addReservation(r2);
+  history.addReservation(r3);
 
-  // Guest selects services
-  manager.addService(reservationId, breakfast);
-  manager.addService(reservationId, airportPickup);
-  manager.addService(reservationId, extraBed);
+  // Admin views booking history
+  List<Reservation> storedReservations = history.getAllReservations();
 
-  // Display selected services
-  manager.displayServices(reservationId);
+  reportService.displayAllBookings(storedReservations);
+
+  // Generate summary report
+  reportService.generateSummary(storedReservations);
  }
 }
-
-
-
 
 
 
